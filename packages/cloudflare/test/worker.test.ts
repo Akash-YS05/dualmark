@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createAEOWorker } from "../src/index.js";
+import { runNegotiationSuite } from "./negotiation-suite.js";
 import type {
   AnalyticsEngineDataset,
   AnalyticsEngineWriteOptions,
@@ -25,7 +26,9 @@ function makeAssets(files: Record<string, string>): AssetsBinding {
   };
 }
 
-function makeUpstream(handler: (req: Request) => Response | Promise<Response>): UpstreamWorker<TestEnv> {
+function makeUpstream(
+  handler: (req: Request) => Response | Promise<Response>,
+): UpstreamWorker<TestEnv> {
   return {
     fetch: async (req) => handler(req),
   };
@@ -68,7 +71,9 @@ describe("createAEOWorker — markdown serving", () => {
 
   it("serves markdown to AI bot UA on existing path", async () => {
     const worker = createAEOWorker({
-      upstream: makeUpstream(() => new Response("html", { headers: { "Content-Type": "text/html" } })),
+      upstream: makeUpstream(
+        () => new Response("html", { headers: { "Content-Type": "text/html" } }),
+      ),
     });
     const req = new Request("https://acme.test/blog/post-1", {
       headers: { "user-agent": "GPTBot/1.0" },
@@ -85,7 +90,9 @@ describe("createAEOWorker — markdown serving", () => {
 
   it("serves markdown when Accept: text/markdown (no bot UA)", async () => {
     const worker = createAEOWorker({
-      upstream: makeUpstream(() => new Response("html", { headers: { "Content-Type": "text/html" } })),
+      upstream: makeUpstream(
+        () => new Response("html", { headers: { "Content-Type": "text/html" } }),
+      ),
     });
     const req = new Request("https://acme.test/blog/post-1", {
       headers: { accept: "text/markdown" },
@@ -97,7 +104,9 @@ describe("createAEOWorker — markdown serving", () => {
 
   it("returns 406 when Accept rules out html and markdown", async () => {
     const worker = createAEOWorker({
-      upstream: makeUpstream(() => new Response("html", { headers: { "Content-Type": "text/html" } })),
+      upstream: makeUpstream(
+        () => new Response("html", { headers: { "Content-Type": "text/html" } }),
+      ),
     });
     const req = new Request("https://acme.test/blog/post-1", {
       headers: { accept: "image/png" },
@@ -409,7 +418,7 @@ describe("createAEOWorker — Link header injection", () => {
           new Response("<html></html>", {
             headers: {
               "Content-Type": "text/html",
-              Link: '</style.css>; rel=preload; as=style',
+              Link: "</style.css>; rel=preload; as=style",
             },
           }),
       ),
@@ -431,4 +440,44 @@ describe("createAEOWorker — Link header injection", () => {
     const res = await worker.fetch(new Request("https://acme.test/page"), env, makeCtx());
     expect(res.headers.get("link")).toBeNull();
   });
+});
+
+runNegotiationSuite("createAEOWorker — negotiation suite", {
+  create: ({ markdownFiles = {}, htmlFiles = {}, upstream404 = false, options = {} }) => {
+    const env: TestEnv = {
+      ASSETS: makeAssets(markdownFiles),
+    };
+
+    const upstream = makeUpstream((req) => {
+      const url = new URL(req.url);
+      const html = htmlFiles[url.pathname];
+      if (html !== undefined) {
+        return new Response(html, {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      if (upstream404) {
+        return new Response("Not Found", {
+          status: 404,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      return new Response("ok", {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    });
+
+    const worker = createAEOWorker({
+      upstream,
+      redirects: options.redirects,
+      trailingSlash: options.trailingSlash,
+      enableLinkHeader: options.enableLinkHeader,
+    });
+
+    return {
+      handle: async (request: Request) => worker.fetch(request, env, makeCtx()),
+    };
+  },
 });

@@ -1,0 +1,26 @@
+{
+  "name": "dualmark-example-vercel-edge-full",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "vercel:dev": "vercel dev --listen 3000",
+    "verify": "node ../../packages/cli/dist/cli.js verify http://localhost:3000/posts/hello"
+  },
+  "dependencies": {
+    "@dualmark/core": "workspace:*",
+    "@dualmark/vercel": "workspace:*",
+    "next": "^16.2.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.5.0",
+    "vercel": "^48.4.1"
+  }
+}
